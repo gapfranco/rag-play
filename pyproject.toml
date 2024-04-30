@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "rag-play"
+version = "0.1.0"
+description = ""
+authors = ["Gonçalo Franco <gapfranco@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.11.8"
+watchdog = "^4.0.0"
+langchain = "^0.1.16"
+langchain-openai = "^0.1.4"
+langchain-anthropic = "^0.1.11"
+langchain-google-genai = "^1.0.3"
+openai = "^1.23.6"
+tiktoken = "^0.6.0"
+google-generativeai = "^0.5.2"
+streamlit = "^1.33.0"
+python-dotenv = "^1.0.1"
+pypdf2 = "^3.0.1"
+chromadb = "^0.5.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
