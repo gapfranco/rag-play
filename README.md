@@ -5,7 +5,7 @@ de abstrair a programação de LLMs com vários modelos diferentes ao mesmo tamp
 
 ## Visão geral
 
-**Retrieval Augmented Engine** (RAG) é uma ferramenta poderosa para recuperação de documentos, sumarização e interação 
+**Retrieval Augmented Generation** (RAG) é uma ferramenta poderosa para recuperação de documentos, sumarização e interação 
 em sessões de perguntas e respostas. Este projeto utiliza LangChain, Streamlit e Chroma para fornecer uma aplicação 
 web integrada, permitindo aos usuários realizar essas tarefas. 
 Com o RAG, você pode facilmente fazer upload de múltiplos documentos em PDF, gerar embeddings vetoriais para o 
