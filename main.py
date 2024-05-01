@@ -3,15 +3,17 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 import streamlit as st
-from langchain.chains.conversational_retrieval.base import \
-    ConversationalRetrievalChain
 from langchain_anthropic import ChatAnthropic
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
+
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+
 from langchain.schema import (
-    # SystemMessage,
     HumanMessage,
     AIMessage
 )
@@ -19,7 +21,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter as Splitter
 
 from PyPDF2 import PdfReader
 
-TMP_DIR = Path(__file__).resolve().parent.joinpath('data', 'tmp')
 LOCAL_VECTOR_DIR = Path(__file__).resolve().parent.joinpath('data',
                                                             'vector_store')
 load_dotenv()
@@ -35,6 +36,8 @@ def init_page():
     )
     st.header("🦜🔗 Langchain RAG playground")
     st.sidebar.title("Opções")
+    st.session_state.source_docs = []
+    st.session_state.retriever = embeddings_on_local_vectordb()
 
 
 def init_messages():
@@ -55,15 +58,12 @@ def clear_messages():
 
 
 def process_documents():
-    if not st.session_state.source_docs:
-        return
     documents = ""
     try:
         for source_doc in st.session_state.source_docs:
             documents += load_pdf(source_doc)
         texts = split_documents(documents)
-        st.session_state.retriever = embeddings_on_local_vectordb(
-            texts)
+        st.session_state.vectordb.add_texts(texts)
 
     except Exception as e:
         st.error(f"Ocorreu umm erro: {e}")
@@ -93,11 +93,10 @@ def split_documents(documents):
     return texts
 
 
-def embeddings_on_local_vectordb(texts):
-    vectordb = Chroma.from_texts(texts, embedding=OpenAIEmbeddings(),
-                                 persist_directory=LOCAL_VECTOR_DIR.as_posix())
-    vectordb.persist()
-    # retriever = vectordb.as_retriever(search_kwargs={'k': 7})
+def embeddings_on_local_vectordb():
+    vectordb = Chroma(embedding_function=OpenAIEmbeddings(),
+                      persist_directory=LOCAL_VECTOR_DIR.as_posix())
+    st.session_state.vectordb = vectordb
     retriever = vectordb.as_retriever(
         # There are also "mmr," "similarity_score_threshold," and others.
         search_type="similarity",
@@ -132,16 +131,39 @@ def select_model():
 
 
 def query_llm(retriever, query, llm):
-    qa_chain = ConversationalRetrievalChain.from_llm(
-        llm=llm,
-        retriever=retriever,
-        return_source_documents=True,
-    )
-    result = qa_chain(
-        {'question': query, 'chat_history': st.session_state.messages})
-    result = result['answer']
+    qa_chain = get_retrieval_lcel(retriever, llm)
+    result = qa_chain.invoke(query)
     st.session_state.messages.append((query, result))
     return result
+
+
+def get_retrieval_lcel(retriever, llm):
+    template = """Use o que sabe e mais os seguintes trechos de contexto para 
+    responder à pergunta no final. 
+    Use até dez sentenças no máximo e mantenha a resposta o mais detalhada
+    possível.
+
+    {context}
+
+    Pergunta: {question}
+
+    Resposta:"""
+
+    prompt = PromptTemplate.from_template(template)
+
+    def format_docs(docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
+    rag_chain = (
+            {
+                "context": retriever | format_docs,
+                "question": RunnablePassthrough(),
+            }
+            | prompt
+            | llm
+            | StrOutputParser()
+    )
+    return rag_chain
 
 
 def main():
@@ -158,9 +180,6 @@ def main():
                                      model
                                      )
             st.session_state.messages.append(AIMessage(content=response))
-        else:
-            st.session_state.messages.append(
-                AIMessage(content="Nenhum documento carregado"))
 
     messages = st.session_state.get('messages', [])
     for message in messages:
